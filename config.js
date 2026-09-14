@@ -1,5 +1,5 @@
-// Expedientes Médicos v4.2
-// Sesión persistente en Vercel + interfaz limpia + eliminar paciente.
+// Expedientes Médicos v4.5
+// Sesión persistente en Vercel + compatibilidad Android/Firefox + eliminar paciente.
 window.EXPEDIENTES_CONFIG = {
   googleClientId: "1075750355168-54100pbjjv8irqqt521va92nr8m11mki.apps.googleusercontent.com"
 };
@@ -9,6 +9,26 @@ window.EXPEDIENTES_CONFIG = {
   if (!persistentMode) return;
 
   let tokenRefreshTimer = null;
+  let navigatingToGoogle = false;
+
+  function startServerLogin() {
+    if (navigatingToGoogle) return;
+    navigatingToGoogle = true;
+    window.location.assign('/api/auth-start');
+  }
+
+  // Firefox/Android puede ignorar manejadores reemplazados por la app instalada.
+  // Capturamos la interacción a nivel documento ANTES que cualquier onclick antiguo.
+  function captureGoogleConnect(event) {
+    const target = event.target?.closest?.('#connectGoogleBtn, #setupConnectBtn, #settingsConnect');
+    if (!target) return;
+    event.preventDefault();
+    event.stopPropagation();
+    startServerLogin();
+  }
+
+  document.addEventListener('click', captureGoogleConnect, true);
+  document.addEventListener('pointerup', captureGoogleConnect, true);
 
   async function getServerToken({ quiet = false } = {}) {
     try {
@@ -57,10 +77,6 @@ window.EXPEDIENTES_CONFIG = {
     }
   }
 
-  function startServerLogin() {
-    location.href = '/api/auth-start';
-  }
-
   async function logoutServer() {
     try {
       await fetch('/api/logout', {
@@ -90,7 +106,6 @@ window.EXPEDIENTES_CONFIG = {
     const connected = banner.classList.contains('connected');
 
     if (connected) {
-      // Ya hay sesión válida: no mostramos "Renovar acceso".
       button.style.display = 'none';
     } else {
       button.style.display = '';
@@ -101,7 +116,16 @@ window.EXPEDIENTES_CONFIG = {
   function wirePersistentButtons() {
     ['connectGoogleBtn', 'setupConnectBtn', 'settingsConnect'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.onclick = startServerLogin;
+      if (!el) return;
+
+      // Evita que una versión anterior deje el botón deshabilitado.
+      try { el.disabled = false; } catch (_) {}
+      el.removeAttribute?.('disabled');
+      el.style.pointerEvents = 'auto';
+      el.onclick = (e) => {
+        e?.preventDefault?.();
+        startServerLogin();
+      };
     });
 
     const clear = document.getElementById('clearClientId');
@@ -223,6 +247,7 @@ window.EXPEDIENTES_CONFIG = {
       );
       cleanConnectedBanner();
       showView('setupView');
+      wirePersistentButtons();
     }
   }
 
