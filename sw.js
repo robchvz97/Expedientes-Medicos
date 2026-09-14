@@ -1,68 +1,17 @@
-const CACHE = 'expedientes-medicos-static-v7';
-const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/styles.css?v=2',
-  '/app.js?v=6',
-  '/config.js?v=6',
-  '/manifest.webmanifest',
-  '/icon-192.png',
-  '/icon-512.png'
-];
-
+// v5.0 - limpieza temporal de caché.
+// Este service worker se autodesinstala y borra todas las cachés previas.
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', event => {
-  const req = event.request;
-  const url = new URL(req.url);
-
-  if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/')) return;
-
-  if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req, { cache: 'no-store' })
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put('/index.html', copy));
-          return response;
-        })
-        .catch(() => caches.match('/index.html'))
-    );
-    return;
-  }
-
-  if (
-    url.pathname === '/index.html' ||
-    url.pathname === '/config.js' ||
-    url.pathname === '/app.js' ||
-    url.pathname === '/sw.js'
-  ) {
-    event.respondWith(
-      fetch(req, { cache: 'no-store' })
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(req, copy));
-          return response;
-        })
-        .catch(() => caches.match(req))
-    );
-    return;
-  }
-
-  event.respondWith(caches.match(req).then(cached => cached || fetch(req)));
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(key => caches.delete(key)));
+    await self.registration.unregister();
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      try { await client.navigate(client.url); } catch (_) {}
+    }
+  })());
 });

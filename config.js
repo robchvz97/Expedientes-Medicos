@@ -1,34 +1,15 @@
-// Expedientes Médicos v4.5
-// Sesión persistente en Vercel + compatibilidad Android/Firefox + eliminar paciente.
-window.EXPEDIENTES_CONFIG = {
-  googleClientId: "1075750355168-54100pbjjv8irqqt521va92nr8m11mki.apps.googleusercontent.com"
-};
-
+// Expedientes Médicos v5.0
+// Un solo flujo OAuth: Vercel server-side. Sin GIS ni manejadores duplicados.
 (() => {
-  const persistentMode = /\.vercel\.app$/i.test(location.hostname) || location.hostname === 'localhost';
-  if (!persistentMode) return;
+  if (!/\.vercel\.app$/i.test(location.hostname) && location.hostname !== 'localhost') return;
 
   let tokenRefreshTimer = null;
-  let navigatingToGoogle = false;
 
-  function startServerLogin() {
-    if (navigatingToGoogle) return;
-    navigatingToGoogle = true;
-    window.location.assign('/api/auth-start');
+  function setLoginLinksVisible(visible) {
+    document.querySelectorAll('.server-login-link').forEach(el => {
+      el.style.display = visible ? '' : 'none';
+    });
   }
-
-  // Firefox/Android puede ignorar manejadores reemplazados por la app instalada.
-  // Capturamos la interacción a nivel documento ANTES que cualquier onclick antiguo.
-  function captureGoogleConnect(event) {
-    const target = event.target?.closest?.('#connectGoogleBtn, #setupConnectBtn, #settingsConnect');
-    if (!target) return;
-    event.preventDefault();
-    event.stopPropagation();
-    startServerLogin();
-  }
-
-  document.addEventListener('click', captureGoogleConnect, true);
-  document.addEventListener('pointerup', captureGoogleConnect, true);
 
   async function getServerToken({ quiet = false } = {}) {
     try {
@@ -55,18 +36,12 @@ window.EXPEDIENTES_CONFIG = {
       await ensureStorage();
       await refreshData();
       markConnected();
-      cleanConnectedBanner();
+      setLoginLinksVisible(false);
       showView('patientsView');
 
       clearTimeout(tokenRefreshTimer);
-      const refreshMs = Math.max(
-        60_000,
-        (Number(data.expires_in || 3600) - 300) * 1000
-      );
-      tokenRefreshTimer = setTimeout(
-        () => getServerToken({ quiet: true }),
-        refreshMs
-      );
+      const refreshMs = Math.max(60_000, (Number(data.expires_in || 3600) - 300) * 1000);
+      tokenRefreshTimer = setTimeout(() => getServerToken({ quiet: true }), refreshMs);
 
       return true;
     } catch (err) {
@@ -79,10 +54,7 @@ window.EXPEDIENTES_CONFIG = {
 
   async function logoutServer() {
     try {
-      await fetch('/api/logout', {
-        method: 'POST',
-        credentials: 'same-origin'
-      });
+      await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
     } catch (_) {}
 
     accessToken = '';
@@ -91,65 +63,9 @@ window.EXPEDIENTES_CONFIG = {
     records = { patients: [], visits: [], payments: [], files: [] };
     clearTimeout(tokenRefreshTimer);
 
-    markDisconnected(
-      'Sesión cerrada. Toca “Conectar con Google” para entrar de nuevo.'
-    );
-    cleanConnectedBanner();
+    markDisconnected('Sesión cerrada. Toca “Conectar con Google” para entrar de nuevo.');
+    setLoginLinksVisible(true);
     showView('setupView');
-  }
-
-  function cleanConnectedBanner() {
-    const banner = document.getElementById('cloudBanner');
-    const button = document.getElementById('connectGoogleBtn');
-    if (!banner || !button) return;
-
-    const connected = banner.classList.contains('connected');
-
-    if (connected) {
-      button.style.display = 'none';
-    } else {
-      button.style.display = '';
-      button.textContent = 'Conectar con Google';
-    }
-  }
-
-  function wirePersistentButtons() {
-    ['connectGoogleBtn', 'setupConnectBtn', 'settingsConnect'].forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-
-      // Evita que una versión anterior deje el botón deshabilitado.
-      try { el.disabled = false; } catch (_) {}
-      el.removeAttribute?.('disabled');
-      el.style.pointerEvents = 'auto';
-      el.onclick = (e) => {
-        e?.preventDefault?.();
-        startServerLogin();
-      };
-    });
-
-    const clear = document.getElementById('clearClientId');
-    if (clear) {
-      clear.textContent = 'Cerrar sesión';
-      clear.onclick = logoutServer;
-    }
-
-    const save = document.getElementById('saveClientId');
-    if (save) save.closest?.('.button-row')?.classList.add('hidden');
-
-    const settingsConnect = document.getElementById('settingsConnect');
-    if (settingsConnect) settingsConnect.textContent = 'Volver a conectar Google';
-
-    const banner = document.getElementById('cloudBanner');
-    if (banner) {
-      new MutationObserver(cleanConnectedBanner).observe(banner, {
-        attributes: true,
-        childList: true,
-        subtree: true
-      });
-    }
-
-    cleanConnectedBanner();
   }
 
   async function deleteCurrentPatient(patient) {
@@ -157,8 +73,7 @@ window.EXPEDIENTES_CONFIG = {
 
     const first = confirm(
       `¿Eliminar a ${name} de la aplicación?\n\n` +
-      'Se quitará de la lista de pacientes y de los totales. ' +
-      'Sus datos quedarán conservados como respaldo en Google Sheets/Drive.'
+      'Se quitará de la lista y de los totales. El historial quedará conservado como respaldo en Google Sheets/Drive.'
     );
     if (!first) return;
 
@@ -172,16 +87,11 @@ window.EXPEDIENTES_CONFIG = {
       if (typeof busy === 'function') busy(true, 'Eliminando paciente…');
 
       const deletedAt = new Date().toISOString();
-      await appendRecord('Patients', {
-        ...patient,
-        updatedAt: deletedAt,
-        deletedAt
-      });
+      await appendRecord('Patients', { ...patient, updatedAt: deletedAt, deletedAt });
 
       await refreshData();
       currentPatientId = null;
       showView('patientsView');
-
       if (typeof toast === 'function') toast('Paciente eliminado');
     } catch (err) {
       if (typeof friendlyError === 'function') friendlyError(err);
@@ -196,28 +106,18 @@ window.EXPEDIENTES_CONFIG = {
     if (!detail || !detail.innerHTML.trim()) return;
 
     const heroActions = detail.querySelector('.hero-actions');
-    if (!heroActions) return;
+    if (!heroActions || document.getElementById('deletePatientBtn')) return;
 
-    if (document.getElementById('deletePatientBtn')) return;
-
-    const patient =
-      typeof records !== 'undefined'
-        ? records.patients.find(
-            p => String(p.id) === String(currentPatientId)
-          )
-        : null;
-
+    const patient = records?.patients?.find(p => String(p.id) === String(currentPatientId));
     if (!patient) return;
 
     const btn = document.createElement('button');
     btn.id = 'deletePatientBtn';
     btn.type = 'button';
     btn.textContent = 'Eliminar';
-    btn.setAttribute('aria-label', `Eliminar a ${patient.fullName || 'paciente'}`);
     btn.style.background = '#fff';
     btn.style.color = '#b42318';
     btn.style.border = '1px solid #fecaca';
-
     btn.onclick = () => deleteCurrentPatient(patient);
     heroActions.appendChild(btn);
   }
@@ -225,39 +125,36 @@ window.EXPEDIENTES_CONFIG = {
   function watchPatientDetail() {
     const detail = document.getElementById('patientDetail');
     if (!detail) return;
+    new MutationObserver(() => setTimeout(ensureDeletePatientButton, 0))
+      .observe(detail, { childList: true, subtree: true });
+  }
 
-    new MutationObserver(() => {
-      setTimeout(ensureDeletePatientButton, 0);
-    }).observe(detail, {
-      childList: true,
-      subtree: true
-    });
+  function wireLogout() {
+    const clear = document.getElementById('clearClientId');
+    if (clear) {
+      clear.textContent = 'Cerrar sesión';
+      clear.onclick = logoutServer;
+    }
 
-    ensureDeletePatientButton();
+    const save = document.getElementById('saveClientId');
+    if (save) save.closest?.('.button-row')?.classList.add('hidden');
   }
 
   async function initPersistentSession() {
-    wirePersistentButtons();
+    wireLogout();
     watchPatientDetail();
 
     const ok = await getServerToken({ quiet: true });
     if (!ok) {
-      markDisconnected(
-        'Conecta Google una sola vez. Después la sesión se restaurará automáticamente.'
-      );
-      cleanConnectedBanner();
+      markDisconnected('Conecta Google una sola vez. Después la sesión se restaurará automáticamente.');
+      setLoginLinksVisible(true);
       showView('setupView');
-      wirePersistentButtons();
     }
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener(
-      'DOMContentLoaded',
-      () => setTimeout(initPersistentSession, 0),
-      { once: true }
-    );
+    document.addEventListener('DOMContentLoaded', initPersistentSession, { once: true });
   } else {
-    setTimeout(initPersistentSession, 0);
+    initPersistentSession();
   }
 })();
