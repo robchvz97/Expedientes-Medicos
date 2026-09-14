@@ -1,13 +1,10 @@
-// Expedientes Médicos v4
-// En GitHub Pages mantiene el flujo anterior. En Vercel usa OAuth de servidor con cookie HttpOnly,
-// por lo que la sesión puede recuperarse al volver a abrir la app sin elegir la cuenta cada vez.
+// Expedientes Médicos v4.1
+// Sesión persistente en Vercel + opción segura para eliminar pacientes de la app.
 window.EXPEDIENTES_CONFIG = {
   googleClientId: "1075750355168-54100pbjjv8irqqt521va92nr8m11mki.apps.googleusercontent.com"
 };
 
 (() => {
-  // El modo persistente solo se activa cuando la app se sirve desde Vercel.
-  // Así puedes subir esta versión al repositorio sin romper temporalmente GitHub Pages.
   const persistentMode = /\.vercel\.app$/i.test(location.hostname) || location.hostname === 'localhost';
   if (!persistentMode) return;
 
@@ -70,7 +67,6 @@ window.EXPEDIENTES_CONFIG = {
       if (el) el.onclick = startServerLogin;
     });
 
-    // Convierte el botón "Quitar" de Client ID en cierre de sesión cuando estamos en Vercel.
     const clear = document.getElementById('clearClientId');
     if (clear) {
       clear.textContent = 'Cerrar sesión';
@@ -81,8 +77,65 @@ window.EXPEDIENTES_CONFIG = {
     if (save) save.closest?.('.button-row')?.classList.add('hidden');
   }
 
+  async function removePatientFromApp(patient) {
+    const ok = confirm(
+      `¿Eliminar a ${patient.fullName || 'este paciente'} de la aplicación?\n\n` +
+      'Se quitará de la lista y de los totales. El historial seguirá conservado como respaldo en Google Sheets/Drive.'
+    );
+    if (!ok) return;
+
+    const verification = prompt('Para confirmar, escribe ELIMINAR:');
+    if (String(verification || '').trim().toUpperCase() !== 'ELIMINAR') {
+      toast('Eliminación cancelada');
+      return;
+    }
+
+    try {
+      busy(true, 'Eliminando paciente…');
+      await appendRecord('Patients', {
+        ...patient,
+        updatedAt: now(),
+        deletedAt: now()
+      });
+      await refreshData();
+      currentPatientId = null;
+      showView('patientsView');
+      toast('Paciente eliminado de la aplicación');
+    } catch (err) {
+      friendlyError(err);
+    } finally {
+      busy(false);
+    }
+  }
+
+  function installDeletePatientButton() {
+    if (typeof window.bindPatientDetail !== 'function') return;
+    if (window.__deletePatientInstalled) return;
+    window.__deletePatientInstalled = true;
+
+    const originalBind = window.bindPatientDetail;
+    window.bindPatientDetail = function(patient) {
+      originalBind(patient);
+
+      const actions = document.querySelector('.hero-actions');
+      if (!actions || document.getElementById('deletePatientBtn')) return;
+
+      const btn = document.createElement('button');
+      btn.id = 'deletePatientBtn';
+      btn.type = 'button';
+      btn.textContent = 'Eliminar';
+      btn.style.background = '#fff';
+      btn.style.color = '#b91c1c';
+      btn.style.border = '1px solid #fecaca';
+      btn.onclick = () => removePatientFromApp(patient);
+      actions.appendChild(btn);
+    };
+  }
+
   async function initPersistentSession() {
     wirePersistentButtons();
+    installDeletePatientButton();
+
     const ok = await getServerToken({ quiet: true });
     if (!ok) {
       markDisconnected('Conecta Google una sola vez en este dispositivo. Después la sesión se restaurará automáticamente.');
