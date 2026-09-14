@@ -1,0 +1,20 @@
+CONFIGURACIÓN RÁPIDA — EXPEDIENTES MÉDICOS
+
+1) Google Cloud Console
+2) Crear proyecto "Expedientes Médicos"
+3) Habilitar:
+   - Google Drive API
+   - Google Sheets API
+4) Configurar OAuth / pantalla de consentimiento
+5) Si está en modo prueba: agregar como usuario de prueba la cuenta de Google del doctor
+6) Credenciales > Crear credenciales > ID de cliente OAuth
+7) Tipo: Aplicación web
+8) Origen autorizado de JavaScript:
+   https://robchvz97.github.io
+9) Copiar el Client ID terminado en:
+   .apps.googleusercontent.com
+10) Abrir la app > Ajustes > pegar Client ID > Guardar
+11) Conectar con Google
+
+NO NECESITAS CLIENT SECRET.
+NO SUBAS NINGÚN CLIENT SECRET A GITHUB.

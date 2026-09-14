@@ -9,8 +9,9 @@
   <meta name="apple-mobile-web-app-title" content="Expedientes" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=2" />
   <title>Expedientes Médicos</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -18,17 +19,43 @@
       <div>
         <div class="eyebrow">EXPEDIENTES MÉDICOS</div>
         <h1 id="pageTitle">Pacientes</h1>
-        <p id="pageSubtitle">Organiza pacientes, consultas, archivos y pagos.</p>
+        <p id="pageSubtitle">Expedientes sincronizados con Google Drive.</p>
       </div>
-      <button id="addPatientTop" class="icon-btn" aria-label="Nuevo paciente">＋</button>
+      <button id="addPatientTop" class="icon-btn hidden" aria-label="Nuevo paciente">＋</button>
     </header>
 
-    <div class="security-banner">
-      <strong>Versión de prueba local.</strong> Los datos se guardan únicamente en este dispositivo/navegador. No uses información clínica real hasta agregar acceso seguro, cifrado y copias de respaldo.
+    <div id="cloudBanner" class="cloud-banner disconnected">
+      <div>
+        <strong id="cloudStatus">Google no conectado</strong>
+        <span id="cloudDetail">Conecta la cuenta que será dueña de los expedientes.</span>
+      </div>
+      <button id="connectGoogleBtn" class="cloud-btn">Conectar con Google</button>
+    </div>
+
+    <div class="privacy-note">
+      Esta versión guarda pacientes, consultas y pagos en una hoja privada de Google Sheets, y los archivos en una carpeta privada de Google Drive. El repositorio de GitHub solo contiene el código de la app.
     </div>
 
     <main>
-      <section id="patientsView" class="view active">
+      <section id="setupView" class="view active">
+        <div class="setup-card">
+          <div class="setup-icon">☁️</div>
+          <div class="eyebrow">CONFIGURACIÓN INICIAL</div>
+          <h2>Conecta Google Drive</h2>
+          <p>Solo se hace una vez por navegador. La misma cuenta podrá abrir los expedientes desde cualquier celular, tablet o computadora.</p>
+
+          <div id="clientIdMissing" class="setup-warning hidden">
+            <strong>Falta configurar el ID de cliente de Google.</strong>
+            <p>En Ajustes puedes pegar el ID de cliente OAuth de Google. No es una contraseña ni un secreto.</p>
+            <button id="goToSettings" class="secondary-btn">Ir a Ajustes</button>
+          </div>
+
+          <button id="setupConnectBtn" class="primary-btn large-btn">Conectar con Google</button>
+          <p class="fineprint">La app solicita el permiso <code>drive.file</code>, que limita el acceso a los archivos que esta propia app crea o utiliza.</p>
+        </div>
+      </section>
+
+      <section id="patientsView" class="view">
         <div class="toolbar">
           <div class="search-wrap">
             <span>⌕</span>
@@ -65,32 +92,47 @@
         <div class="section-heading">
           <div>
             <div class="eyebrow">AJUSTES</div>
-            <h2>Datos y respaldo</h2>
+            <h2>Google y almacenamiento</h2>
           </div>
         </div>
+
         <div class="settings-card">
-          <h3>Almacenamiento</h3>
-          <p>Esta versión usa IndexedDB del navegador para soportar muchos pacientes y archivos.</p>
-          <p class="muted">Si se borran los datos del navegador o se pierde el dispositivo, se puede perder la información. Para uso real necesitaremos un servidor seguro con usuarios, cifrado y respaldos.</p>
-        </div>
-        <div class="settings-card">
-          <h3>Respaldo de prueba</h3>
-          <p>Exporta los datos clínicos y financieros en JSON. Los archivos adjuntos no se incluyen en este respaldo ligero.</p>
+          <h3>Google OAuth Client ID</h3>
+          <p class="muted">Se crea una vez en Google Cloud. Es público por diseño y puede guardarse en esta app; nunca pongas aquí un Client Secret.</p>
+          <label class="field-label">Client ID
+            <input id="googleClientId" class="settings-input" placeholder="123456789-abc...apps.googleusercontent.com" />
+          </label>
           <div class="button-row">
-            <button id="exportBackup" class="secondary-btn">Exportar respaldo</button>
-            <label class="secondary-btn file-label">Importar respaldo<input id="importBackup" type="file" accept="application/json" hidden /></label>
+            <button id="saveClientId" class="primary-btn">Guardar</button>
+            <button id="clearClientId" class="secondary-btn">Quitar</button>
           </div>
         </div>
-        <div class="settings-card danger-card">
-          <h3>Zona de prueba</h3>
-          <button id="loadDemo" class="secondary-btn">Cargar datos de ejemplo</button>
-          <button id="clearAll" class="text-btn danger">Borrar todos los datos</button>
+
+        <div class="settings-card">
+          <h3>Estado de Google</h3>
+          <div class="status-grid">
+            <div><span>Cuenta</span><strong id="settingsConnection">No conectada</strong></div>
+            <div><span>Base de datos</span><strong id="settingsSheet">—</strong></div>
+            <div><span>Archivos</span><strong id="settingsFolder">—</strong></div>
+          </div>
+          <div class="button-row">
+            <button id="settingsConnect" class="primary-btn">Conectar / renovar acceso</button>
+            <a id="openSheet" class="secondary-btn link-btn hidden" target="_blank" rel="noopener">Abrir hoja</a>
+            <a id="openFolder" class="secondary-btn link-btn hidden" target="_blank" rel="noopener">Abrir carpeta</a>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>Cómo funciona</h3>
+          <p><b>Google Sheets</b> almacena pacientes, consultas, pagos y el índice de archivos.</p>
+          <p><b>Google Drive</b> almacena imágenes, PDFs y documentos en una carpeta separada por paciente.</p>
+          <p class="muted">Los datos clínicos no se guardan dentro de GitHub ni dentro del código de la aplicación.</p>
         </div>
       </section>
     </main>
 
     <nav class="bottom-nav">
-      <button data-view="patientsView" class="nav-btn active"><span>👥</span>Pacientes</button>
+      <button data-view="patientsView" class="nav-btn"><span>👥</span>Pacientes</button>
       <button data-view="settingsView" class="nav-btn"><span>⚙️</span>Ajustes</button>
     </nav>
   </div>
@@ -102,12 +144,14 @@
         <button type="button" class="close-btn" data-close="patientDialog">×</button>
       </div>
       <input type="hidden" id="patientId" />
+      <input type="hidden" id="patientCreatedAt" />
+      <input type="hidden" id="patientFolderId" />
       <div class="form-grid">
         <label class="span-2">Nombre completo<input id="fullName" required maxlength="140" /></label>
         <label>Fecha de nacimiento<input id="birthDate" type="date" /></label>
         <label>Teléfono<input id="phone" type="tel" maxlength="30" /></label>
-        <label class="span-2">Diagnóstico / enfermedad<textarea id="diagnosis" rows="3" maxlength="800"></textarea></label>
-        <label class="span-2">Notas generales<textarea id="generalNotes" rows="4" maxlength="2000"></textarea></label>
+        <label class="span-2">Diagnóstico / enfermedad<textarea id="diagnosis" rows="3" maxlength="1200"></textarea></label>
+        <label class="span-2">Notas generales<textarea id="generalNotes" rows="4" maxlength="3000"></textarea></label>
         <label>Total acordado ($)<input id="treatmentTotal" type="number" min="0" step="0.01" inputmode="decimal" value="0" /></label>
       </div>
       <div class="modal-actions"><button type="button" class="secondary-btn" data-close="patientDialog">Cancelar</button><button class="primary-btn" type="submit">Guardar paciente</button></div>
@@ -120,8 +164,8 @@
       <div class="form-grid">
         <label>Fecha<input id="visitDate" type="date" required /></label>
         <label>Motivo<input id="visitReason" maxlength="180" /></label>
-        <label class="span-2">Evolución / progreso<textarea id="visitProgress" rows="4" required maxlength="2500"></textarea></label>
-        <label class="span-2">Indicaciones / tratamiento<textarea id="visitPlan" rows="3" maxlength="2000"></textarea></label>
+        <label class="span-2">Evolución / progreso<textarea id="visitProgress" rows="4" required maxlength="3500"></textarea></label>
+        <label class="span-2">Indicaciones / tratamiento<textarea id="visitPlan" rows="3" maxlength="3000"></textarea></label>
       </div>
       <div class="modal-actions"><button type="button" class="secondary-btn" data-close="visitDialog">Cancelar</button><button class="primary-btn" type="submit">Guardar consulta</button></div>
     </form>
@@ -146,11 +190,14 @@
         <label class="span-2">Archivo<input id="patientFile" type="file" required accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" /></label>
         <label class="span-2">Descripción<input id="fileDescription" maxlength="180" placeholder="Radiografía, análisis, receta..." /></label>
       </div>
-      <div class="modal-actions"><button type="button" class="secondary-btn" data-close="fileDialog">Cancelar</button><button class="primary-btn" type="submit">Guardar archivo</button></div>
+      <div class="modal-actions"><button type="button" class="secondary-btn" data-close="fileDialog">Cancelar</button><button class="primary-btn" type="submit">Subir a Drive</button></div>
     </form>
   </dialog>
 
+  <div id="loader" class="loader hidden"><div class="spinner"></div><p id="loaderText">Sincronizando…</p></div>
   <div id="toast" class="toast hidden"></div>
-  <script src="app.js"></script>
+
+  <script src="config.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
