@@ -1,6 +1,5 @@
-// Puedes dejarlo vacío y pegar el Client ID desde Ajustes dentro de la app.
-// Si quieres que quede configurado para todos los dispositivos, reemplaza el texto
-// de abajo por tu OAuth Client ID de Google (NO es un Client Secret).
+// Configuración OAuth de Google para Expedientes Médicos.
+// Este Client ID es público y se usa desde GitHub Pages para solicitar acceso a Google Drive.
 window.EXPEDIENTES_CONFIG = {
-  googleClientId: ""
+  googleClientId: "1075750355168-54100pbjjv8irqqt521va92nr8m11mki.apps.googleusercontent.com"
 };
