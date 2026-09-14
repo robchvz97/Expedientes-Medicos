@@ -1,10 +1,10 @@
-const CACHE = 'expedientes-medicos-static-v5';
+const CACHE = 'expedientes-medicos-static-v6';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/styles.css?v=2',
-  '/app.js?v=2',
-  '/config.js?v=2',
+  '/app.js?v=4',
+  '/config.js?v=4',
   '/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png'
@@ -21,9 +21,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(key => key !== CACHE).map(key => caches.delete(key))
-      ))
+      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -37,7 +35,7 @@ self.addEventListener('fetch', event => {
 
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then(response => {
           const copy = response.clone();
           caches.open(CACHE).then(cache => cache.put('/index.html', copy));
@@ -48,11 +46,8 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  if (
-    url.pathname === '/manifest.webmanifest' ||
-    url.pathname === '/config.js' ||
-    url.pathname === '/sw.js'
-  ) {
+  if (url.pathname.endsWith('/app.js') || url.pathname.endsWith('/config.js') ||
+      url.pathname.endsWith('/manifest.webmanifest') || url.pathname.endsWith('/sw.js')) {
     event.respondWith(
       fetch(req, { cache: 'no-store' })
         .then(response => {
@@ -66,15 +61,12 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith(
-    caches.match(req).then(cached => {
-      if (cached) return cached;
-      return fetch(req).then(response => {
-        if (response && response.ok && req.method === 'GET') {
-          const copy = response.clone();
-          caches.open(CACHE).then(cache => cache.put(req, copy));
-        }
-        return response;
-      });
-    })
+    caches.match(req).then(cached => cached || fetch(req).then(response => {
+      if (response && response.ok && req.method === 'GET') {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(req, copy));
+      }
+      return response;
+    }))
   );
 });

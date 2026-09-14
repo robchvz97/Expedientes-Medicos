@@ -128,6 +128,13 @@ async function ensureTokenClient(){
   return tokenClient;
 }
 async function connectGoogle(){
+  // En Vercel usamos el flujo OAuth del servidor. Esto funciona de forma
+  // consistente en Chrome, Firefox y accesos directos instalados en Android.
+  const serverOauthMode=/\.vercel\.app$/i.test(location.hostname)||location.hostname==='localhost';
+  if(serverOauthMode){
+    window.location.assign('/api/auth-start');
+    return;
+  }
   try{
     const tc=await ensureTokenClient();
     busy(true,'Conectando con Google…');
@@ -380,6 +387,16 @@ function renderSettings(){
 }
 
 $('#connectGoogleBtn').onclick=connectGoogle;$('#setupConnectBtn').onclick=connectGoogle;$('#settingsConnect').onclick=connectGoogle;
+// Refuerzo para Android/Firefox: navegación directa al OAuth del servidor.
+if(/\.vercel\.app$/i.test(location.hostname)||location.hostname==='localhost'){
+  ['connectGoogleBtn','setupConnectBtn','settingsConnect'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){
+      el.disabled=false;
+      el.onclick=e=>{e?.preventDefault?.();window.location.assign('/api/auth-start');};
+    }
+  });
+}
 $('#saveClientId').onclick=()=>{const v=$('#googleClientId').value.trim();if(!v.endsWith('.apps.googleusercontent.com')){alert('Pega un OAuth Client ID válido que termine en .apps.googleusercontent.com');return;}setClientId(v);toast('Client ID guardado');};
 $('#clearClientId').onclick=()=>{if(confirm('¿Quitar el Client ID guardado de este dispositivo?')){setClientId('');markDisconnected();toast('Client ID eliminado');}};
 $('#goToSettings').onclick=()=>showView('settingsView');
