@@ -1,10 +1,10 @@
-const CACHE = 'expedientes-medicos-static-v6';
+const CACHE = 'expedientes-medicos-static-v7';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/styles.css?v=2',
-  '/app.js?v=4',
-  '/config.js?v=5',
+  '/app.js?v=6',
+  '/config.js?v=6',
   '/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png'
@@ -21,9 +21,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(key => key !== CACHE).map(key => caches.delete(key))
-      ))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -48,7 +46,12 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  if (url.pathname === '/config.js' || url.pathname === '/sw.js') {
+  if (
+    url.pathname === '/index.html' ||
+    url.pathname === '/config.js' ||
+    url.pathname === '/app.js' ||
+    url.pathname === '/sw.js'
+  ) {
     event.respondWith(
       fetch(req, { cache: 'no-store' })
         .then(response => {
@@ -61,7 +64,5 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  event.respondWith(
-    caches.match(req).then(cached => cached || fetch(req))
-  );
+  event.respondWith(caches.match(req).then(cached => cached || fetch(req)));
 });
